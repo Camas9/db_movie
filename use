@@ -1,0 +1,412 @@
+import subprocess
+
+from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QTableWidget, QTableWidgetItem, QWidget,
+                             QPushButton, QFileDialog)
+from PyQt5 import QtCore, QtGui, QtWidgets
+import TestDesigner
+import sys
+import csv
+import time
+import os
+import pyttsx3
+
+
+class Window(TestDesigner.Ui_Dialog, QtWidgets.QMainWindow):
+    def __init__(self):
+
+        super(Window, self).__init__()
+        self.setupUi(self)
+        # 监听按钮的单击
+        self.pushButton_sp_db.clicked.connect(self.sp_db)
+        self.pushButton_sp_comment.clicked.connect(self.sp_comment)
+        self.pushButton_open.clicked.connect(self.open)
+        self.pushButton_db_analysis.clicked.connect(self.db)
+        self.pushButton_comment_analysis.clicked.connect(self.comment)
+
+        # 设置图片的默认路径为当前工作路径（项目的路径）
+        self.defaultImFolder = os.getcwd()
+        # 设置为填充模式（图片填充满 Label）
+        self.label_Image.setScaledContents(True)
+
+        self.pushButton_Open.clicked.connect(self.OpenPictureDir)
+        self.pushButton_Next.clicked.connect(self.ShowNextImg)
+        self.pushButton_Before.clicked.connect(self.ShowBeforeImg)
+        self.pushButton_Bigger.clicked.connect(self.DoBiggerImg)
+        self.pushButton_Smaller.clicked.connect(self.DoSmallerImg)
+        self.imageNameList = []
+        self.soud = pyttsx3.init()
+
+    def sp_db(self):  # 爬取豆瓣电影数据
+        import requests
+        from bs4 import BeautifulSoup
+        import pandas as pd
+        from time import sleep
+        movie_name = []  # 电影名称
+        movie_url = []  # 电影链接
+        movie_star = []  # 电影评分
+        movie_star_people = []  # 评分人数
+        movie_director = []  # 后续数据
+        movie_actor = []  # 导演
+        movie_year = []  # 上映年份
+        movie_country = []  # 国家
+        movie_type = []  # 类型
+
+        def get_movie(url, headers):  # 获取电影数据
+            res = requests.get(url, headers=headers)  # 获取解析
+            soup = BeautifulSoup(res.text, 'html.parser')
+            for movie in soup.select('.item'):
+                name = movie.select('.hd a')[0].text.replace('\n', '')  # 电影名称
+                movie_name.append(name)
+                url = movie.select('.hd a')[0]['href']  # 电影链接
+                movie_url.append(url)
+                star = movie.select('.rating_num')[0].text  # 电影评分
+                movie_star.append(star)
+                star_people = movie.select('.star span')[3].text  # 评分人数
+                star_people = star_people.strip().replace('人评价', '')
+                movie_star_people.append(star_people)
+                movie_info = movie.select('.bd p')[0].text.strip()  # 导演和主演，年份，国家，类型
+                dirrctor = movie_info.split('\n')[0].split(' ')[0]
+                movie_director.append(dirrctor)
+                actor = movie_info.split('\n')[0].split(' ')[1]  # 导演
+                movie_actor.append(actor)
+                if name == '大闹天宫 / 大闹天宫 上下集  /  The Monkey King':  # 大闹天宫，特殊处理
+                    year0 = movie_info.split('\n')[1].split('/')[0].strip()
+                    year1 = movie_info.split('\n')[1].split('/')[1].strip()
+                    year2 = movie_info.split('\n')[1].split('/')[2].strip()
+                    year = year0 + '/' + year1 + '/' + year2
+                    movie_year.append(year)
+                    country = movie_info.split('\n')[1].split('/')[3].strip()
+                    movie_country.append(country)
+                    type = movie_info.split('\n')[1].split('/')[4].strip()
+                    movie_type.append(type)
+                else:  # 正常处理
+                    year = movie_info.split('\n')[1].split('/')[0].strip()  # 年份
+                    movie_year.append(year)
+                    country = movie_info.split('\n')[1].split('/')[1].strip()  # 国家
+                    movie_country.append(country)
+                    type = movie_info.split('\n')[1].split('/')[2].strip()  # 类型
+                    movie_type.append(type)
+
+        def save_movie():  # 保存数据
+            df = pd.DataFrame()
+            df['电影名称'] = movie_name  # 电影名称
+            df['电影链接'] = movie_url  # 电影链接
+            df['电影评分'] = movie_star  # 电影评分
+            df['评分人数'] = movie_star_people  # 评分人数
+            df['导演'] = movie_actor  # 导演
+            df['上映年份'] = movie_year  # 上映年份
+            df['国家'] = movie_country  # 国家
+            df['类型'] = movie_type  # 类型
+            df.to_csv('dbmovie.csv', encoding='utf_8_sig')  # 将数据保存到csv文件
+
+        start = time.perf_counter()  # 开始时间
+        headers = {  # 伪装头部
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.135 Safari/537.36"}
+        for i in range(10):
+            page_url = 'https://movie.douban.com/top250?start={}'.format((str(i * 25)))  # 豆瓣电影Top250网页
+            print('正在获取第{}页，地址为:{}'.format(str(i + 1), page_url))
+            self.textEdit.append('正在获取第{}页，地址为:{}'.format(str(i + 1), page_url))
+            get_movie(page_url, headers)
+            sleep(1)  # 睡眠，物理制造间隔
+            print('获取下一页...')
+
+        print('获取完毕\n')
+        self.textEdit.append('获取完毕\n')
+        print('正在存储数据...\n')
+        self.textEdit.append('正在存储数据...\n')
+        self.soud.say("豆瓣电影数据爬取完成")
+        self.soud.runAndWait()
+        save_movie()
+        import pymysql
+        import csv
+        import pandas as pd
+        import re
+        df = pd.read_csv('dbmovie.csv', encoding='utf-8')
+
+        # 定义一个函数来提取年份信息
+        def extract_year(text):
+            match = re.search(r'\b(\d{4})\b', text)
+            if match:
+                return match.group(1)
+            else:
+                return None
+
+        # 清洗上映年份数据，提取出年份信息
+        df['上映年份'] = df['上映年份'].apply(lambda x: extract_year(str(x)))
+
+        # 将评分人数字段转换为整数型
+        df['评分人数'] = df['评分人数'].astype(int)
+
+        # 连接到数据库
+        connection = pymysql.connect(host='127.0.0.1',
+                                     user='root',
+                                     password='123456',
+                                     database='movie')
+
+        # 创建游标对象
+        cursor = connection.cursor()
+
+        # 读取 CSV 文件并插入数据
+        for index, row in df.iterrows():
+            cursor.execute(
+                "INSERT INTO douban_movies (电影名称, 电影链接, 电影评分, 评分人数, 导演, 上映年份, 国家, 类型) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (row['电影名称'], row['电影链接'], row['电影评分'], row['评分人数'], row['导演'], row['上映年份'], row['国家'], row['类型']))
+
+        # 提交更改
+        connection.commit()
+
+        # 关闭连接
+        connection.close()
+
+        print('存储完毕...\n')
+        self.textEdit.append('存储完毕...\n')
+        end = time.perf_counter()  # 结束时间
+        print("time:%s" % (end - start))
+        self.textEdit.append("time:%s" % (end - start))
+
+    def sp_comment(self):  # 爬取豆瓣电影影评数据
+        import requests
+        from bs4 import BeautifulSoup
+        import urllib.parse
+
+        import xlwt
+        import pandas as pd
+        import re
+        def login(username, password):
+            url = "https://accounts.douban.com/passport/login?redir=https%3A%2F%2Fmovie.douban.com%2Fsubject%2F35267208%2Fcomments%3Fstart%3D0%26limit%3D20%26sort%3Dnew_score%26status%3DP"
+            header = {
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36',
+                'Referer': 'https://accounts.douban.com/passport/login_popup?login_source=anony',
+                'Origin': 'https://accounts.douban.com',
+                'content-Type': 'application/x-www-form-urlencoded',
+                'x-requested-with': 'XMLHttpRequest',
+                'accept': 'application/json',
+                'accept-encoding': 'gzip, deflate, br',
+                'accept-language': 'zh-CN,zh;q=0.9',
+                'connection': 'keep-alive'
+                , 'Host': 'accounts.douban.com'
+            }
+            # 登陆需要携带的参数
+            data = {
+                'ck': '',
+                'name': '',
+                'password': '',
+                'remember': 'false',
+                'ticket': ''
+            }
+            data['name'] = username
+            data['password'] = password
+            data = urllib.parse.urlencode(data)
+            print(data)
+            req = requests.post(url, headers=header, data=data, verify=False)
+            cookies = requests.utils.dict_from_cookiejar(req.cookies)
+            print(cookies)
+            return cookies
+
+        def getcomment(cookies, mvid, start):  # 参数为登录成功的cookies(后台可通过cookies识别用户，电影的id)
+            w = xlwt.Workbook(encoding='ascii')  # #创建可写的workbook对象
+            ws = w.add_sheet('sheet1')  # 创建工作表sheet
+            index = 1  # 表示行的意思，在xls文件中写入对应的行数
+            while True:
+                # 模拟浏览器头发送请求
+                header = {
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36',
+                }
+                # try catch 尝试，一旦有错误说明执行完成，没错误继续进行
+                try:
+                    # 拼凑url 每次star加20
+
+                    url = 'https://movie.douban.com/subject/' + str(mvid) + '/comments?start=' + str(
+                        start) + "&limit=20&sort=new_score&status=P"
+                    start += 20
+                    html = requests.get(url, headers=header,
+                                        cookies=cookies)
+                    # Beautifulsoup解析网址
+                    soup = BeautifulSoup(html.text, "html.parser")
+                    # print(html.text)
+                    # 爬取的数据
+                    # 评论时间
+                    # 找span标签，找span标签中的class的comment-time
+                    comment_time_list = soup.find_all('span', class_='comment-time')
+                    # 设置循环终止变量
+                    # 当评论为0时，就结束循环
+                    if len(comment_time_list) == 0:
+                        print('已获取所有评论')
+                        self.textEdit_2.append('已获取所有评论')
+                        self.soud.say("豆瓣电影影评数据爬取完成")
+                        self.soud.runAndWait()
+                        break
+                    # print(comment_time_list)
+                    # 评论用户名
+                    use_name_list = soup.find_all('span', attrs={'class': 'comment-info'})
+                    # 评论文本
+                    comment_list = soup.find_all('span', attrs={'class': 'short'})
+                    # 评分
+                    rating_list = soup.find_all('span', attrs={'class': re.compile(r"allstar(\s\w+)?")})
+                    # ip
+                    ip_list = soup.find_all('span', attrs={'class': 'comment-location'})
+                    if len(rating_list) != 20:
+                        temp_soup = BeautifulSoup('<span class="allstar30 rating" title="还行"></span>')
+                        a = temp_soup.find_all('span', attrs={'class': re.compile(r"allstar(\s\w+)?")})
+                        rating_list = rating_list + a
+                    for r in range(len(comment_time_list)):
+                        data1 = [
+                            (comment_time_list[r].string,
+                             # 评论用户名，下的a标签，
+                             use_name_list[r].a.string,
+                             comment_list[r].string,
+                             rating_list[r].get('class')[0],
+                             ip_list[r].string)
+                        ]
+                        data2 = pd.DataFrame(data1)
+                        # 存储数据
+                        data2.to_csv('TheWanderingEarth2_comment.csv', header=False, index=False, mode='a+',
+                                     encoding="utf-8-sig")
+                    print('正在获取第{}条评论'.format(str(start + 1)))
+                    self.textEdit_2.append('正在获取第{}条评论'.format(str(start + 1)))
+
+                except Exception as e:  # 有异常退出
+                    print(e)
+                    break
+                if start == 440:
+                    print(2)
+                    break
+
+        start = time.perf_counter()  # 开始时间
+        # 用户信息
+        username = '13268621410'
+        password = 'abc1123995252@'
+        cookies = login(username, password)
+        mvid = 35267208  # 流浪地球2
+        getcomment(cookies, mvid, start=0)
+        # 添加表头
+        df = pd.read_csv('TheWanderingEarth2_comment.csv', header=None, names=['评论时间', '用户', '评论内容', '评分', '城市'])
+        # df.to_csv('comment.csv', index=False, encoding="utf-8-sig")
+        # 将评分数据改为数字样式
+        df.replace("allstar10", "10", inplace=True)
+        df.replace("allstar20", "20", inplace=True)
+        df.replace("allstar30", "30", inplace=True)
+        df.replace("allstar40", "40", inplace=True)
+        df.replace("allstar50", "50", inplace=True)
+        df.to_csv('comment.csv', index=False, encoding="utf-8-sig")
+        import pymysql
+        import csv
+
+        # 连接到数据库
+        connection = pymysql.connect(host='127.0.0.1',
+                                     user='root',
+                                     password='123456',
+                                     database='movie')
+
+        # 创建游标对象
+        cursor = connection.cursor()
+
+        # 读取 CSV 文件并插入数据
+        with open('comment.csv', 'r', encoding='utf-8') as file:
+            data = csv.reader(file)
+            next(data)  # 跳过标题行
+            for row in data:
+                cursor.execute("INSERT INTO movie_comments (评论时间, 用户, 评论内容, 评分, 城市) VALUES (%s, %s, %s, %s, %s)", row)
+
+        # 提交更改
+        connection.commit()
+
+        # 关闭连接
+        connection.close()
+        end = time.perf_counter()  # 结束时间
+        print("time:%s" % (end - start))
+        self.textEdit_2.append("time:%s" % (end - start))
+
+    def db(self):
+        os.system('python C:/Users/Administrator/PycharmProjects/pythonProject2/db_analysis.py')
+
+    def comment(self):
+        os.system('python C:/Users/Administrator/PycharmProjects/pythonProject2/comment_analysis.py')
+
+    def open(self):  # 打开文件
+        self.textEdit.clear()
+        self.textEdit_2.clear()
+        file_name, _ = QFileDialog.getOpenFileName(self, 'Open CSV', '', 'CSV Files (*.csv)')  # 定义为csv文件
+        if file_name:
+            with open(file_name, newline='', encoding='utf-8') as file:
+                csv_reader = csv.reader(file)
+                data = list(csv_reader)
+
+                if len(data) > 0:
+                    self.tableWidget.setRowCount(len(data))
+                    self.tableWidget.setColumnCount(len(data[0]))
+
+                    for i, row_data in enumerate(data):
+                        for j, val in enumerate(row_data):
+                            item = QTableWidgetItem(val)
+                            self.tableWidget.setItem(i, j, item)
+
+    def OpenPictureDir(self):  # 打开目录
+        # 在资源管理器窗口中打开默认路径
+        selectimgFolder = QtWidgets.QFileDialog.getExistingDirectory(None, "selectfolder", self.defaultImFolder)
+        # 如果有选中路径
+        if selectimgFolder != '':
+            self.imgFolder = selectimgFolder
+        # 获取该路径下面所有的图片名称列表
+        self.imageNameList = os.listdir(self.imgFolder)
+        # print(self.imageNameList)
+        if len(self.imageNameList) > 0:
+            # 获取第一张图片的路径
+            imgPath = os.path.join(self.imgFolder, self.imageNameList[0])
+            # 绘制图片，显示出来
+            self.pix = QtGui.QPixmap(imgPath)
+            self.label_Image.setPixmap(self.pix)
+            # 标记第一张图片的 id 为 0
+            self.curImgId = 0
+
+    def ShowNextImg(self):  # 下一张
+        # 如果不存在图片，则跳出
+        if len(self.imageNameList) == 0:
+            return
+        imgCount = len(self.imageNameList)
+        # 当前如果不是最后一张图片，才可以显示下一张
+        if self.curImgId < imgCount - 1:
+            imPath = os.path.join(self.imgFolder, self.imageNameList[self.curImgId + 1])
+            self.pix = QtGui.QPixmap(imPath)
+            self.label_Image.setPixmap(self.pix)
+            self.curImgId = self.curImgId + 1
+
+    def ShowBeforeImg(self):  # 上一张
+        # 如果不存在图片，则跳出
+        if len(self.imageNameList) == 0:
+            return
+        # 当前如果不是第一张图片，才能显示上一张
+        if self.curImgId > 0:
+            imPath = os.path.join(self.imgFolder, self.imageNameList[self.curImgId - 1])
+            self.pix = QtGui.QPixmap(imPath)
+            self.label_Image.setPixmap(self.pix)
+            self.curImgId = self.curImgId - 1
+        if self.curImgId < 0:
+            self.curImgId = 0
+
+    def DoBiggerImg(self):  # 放大
+        # 如果不存在图片，则跳出
+        if len(self.imageNameList) == 0:
+            return
+        # 控制放大后，高度最大不超过 900
+        if self.label_Image.height() >= 900:
+            return
+        self.label_Image.setFixedSize(int(self.label_Image.width() * 1.1), int(self.label_Image.height() * 1.1)
+                                      )
+
+    def DoSmallerImg(self):  # 缩小
+        # 如果不存在图片，则跳出
+        if len(self.imageNameList) == 0:
+            return
+        # 控制缩小后后，高度最小不小于 100
+        if self.label_Image.height() <= 100:
+            return
+        self.label_Image.setFixedSize(int(self.label_Image.width() * 0.9), int(self.label_Image.height() * 0.9))
+
+
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
+    mywindow = Window()
+    mywindow.show()  # 可视化界面
+    sys.exit(app.exec_())
