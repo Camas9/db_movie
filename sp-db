@@ -1,0 +1,80 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+from time import sleep
+
+movie_name = []  # 电影名称
+movie_url = []  # 电影链接
+movie_star = []  # 电影评分
+movie_star_people = []  # 评分人数
+movie_director = []  # 后续数据
+movie_actor = []  # 导演
+movie_year = []  # 上映年份
+movie_country = []  # 国家
+movie_type = []  # 类型
+
+
+
+def get_movie(url, headers):  # 获取电影数据
+    res = requests.get(url, headers=headers)  # 获取解析
+    soup = BeautifulSoup(res.text, 'html.parser')
+    for movie in soup.select('.item'):
+        name = movie.select('.hd a')[0].text.replace('\n', '')  # 电影名称
+        movie_name.append(name)
+        url = movie.select('.hd a')[0]['href']  # 电影链接
+        movie_url.append(url)
+        star = movie.select('.rating_num')[0].text  # 电影评分
+        movie_star.append(star)
+        star_people = movie.select('.star span')[3].text  # 评分人数
+        star_people = star_people.strip().replace('人评价', '')
+        movie_star_people.append(star_people)
+        movie_info = movie.select('.bd p')[0].text.strip()  # 导演和主演，年份，国家，类型
+        dirrctor = movie_info.split('\n')[0].split(' ')[0]
+        movie_director.append(dirrctor)
+        actor = movie_info.split('\n')[0].split(' ')[1]  # 导演
+        movie_actor.append(actor)
+        if name == '大闹天宫 / 大闹天宫 上下集  /  The Monkey King':  # 大闹天宫，特殊处理
+            year0 = movie_info.split('\n')[1].split('/')[0].strip()
+            year1 = movie_info.split('\n')[1].split('/')[1].strip()
+            year2 = movie_info.split('\n')[1].split('/')[2].strip()
+            year = year0 + '/' + year1 + '/' + year2
+            movie_year.append(year)
+            country = movie_info.split('\n')[1].split('/')[3].strip()
+            movie_country.append(country)
+            type = movie_info.split('\n')[1].split('/')[4].strip()
+            movie_type.append(type)
+        else:  # 正常处理
+            year = movie_info.split('\n')[1].split('/')[0].strip()  # 年份
+            movie_year.append(year)
+            country = movie_info.split('\n')[1].split('/')[1].strip()  # 国家
+            movie_country.append(country)
+            type = movie_info.split('\n')[1].split('/')[2].strip()  # 类型
+            movie_type.append(type)
+
+
+def save_movie():  # 保存数据
+    df = pd.DataFrame()
+    df['电影名称'] = movie_name  # 电影名称
+    df['电影链接'] = movie_url  # 电影链接
+    df['电影评分'] = movie_star  # 电影评分
+    df['评分人数'] = movie_star_people  # 评分人数
+    df['导演'] = movie_actor  # 导演
+    df['上映年份'] = movie_year  # 上映年份
+    df['国家'] = movie_country  # 国家
+    df['类型'] = movie_type  # 类型
+    df.to_csv('dbmovie.csv', encoding='utf_8_sig')  # 将数据保存到csv文件
+
+
+if __name__ == '__main__':
+    headers = {  # 伪装头部
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.135 Safari/537.36"}
+    for i in range(10):
+        page_url = 'https://movie.douban.com/top250?start={}'.format((str(i * 25)))  # 豆瓣电影Top250网页
+        print('正在获取第{}页，地址为:{}'.format(str(i + 1), page_url))
+        get_movie(page_url, headers)
+        sleep(1)  # 睡眠，物理制造间隔
+        print('获取下一页...')
+    print('获取完毕\n')
+    print('正在存储数据...\n')
+    save_movie()
+    print('存储完毕...')
