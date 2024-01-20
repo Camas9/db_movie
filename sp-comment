@@ -1,0 +1,129 @@
+import requests
+from bs4 import BeautifulSoup
+import urllib.parse
+
+import xlwt
+import xlrd
+import pandas as pd
+import re
+
+
+# 账号密码
+def login(username, password):
+    url = "https://accounts.douban.com/passport/login?redir=https%3A%2F%2Fmovie.douban.com%2Fsubject%2F35267208%2Fcomments%3Fstart%3D0%26limit%3D20%26sort%3Dnew_score%26status%3DP"
+    header = {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36',
+        'Referer': 'https://accounts.douban.com/passport/login_popup?login_source=anony',
+        'Origin': 'https://accounts.douban.com',
+        'content-Type': 'application/x-www-form-urlencoded',
+        'x-requested-with': 'XMLHttpRequest',
+        'accept': 'application/json',
+        'accept-encoding': 'gzip, deflate, br',
+        'accept-language': 'zh-CN,zh;q=0.9',
+        'connection': 'keep-alive'
+        , 'Host': 'accounts.douban.com'
+    }
+    # 登陆需要携带的参数
+    data = {
+        'ck': '',
+        'name': '',
+        'password': '',
+        'remember': 'false',
+        'ticket': ''
+    }
+    data['name'] = username
+    data['password'] = password
+    data = urllib.parse.urlencode(data)
+    print(data)
+    req = requests.post(url, headers=header, data=data, verify=False)
+    cookies = requests.utils.dict_from_cookiejar(req.cookies)
+    print(cookies)
+    return cookies
+
+
+def getcomment(cookies, mvid, start):  # 参数为登录成功的cookies(后台可通过cookies识别用户，电影的id)
+    w = xlwt.Workbook(encoding='ascii')  # #创建可写的workbook对象
+    ws = w.add_sheet('sheet1')  # 创建工作表sheet
+    index = 1  # 表示行的意思，在xls文件中写入对应的行数
+    while True:
+        # 模拟浏览器头发送请求
+        header = {
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36',
+        }
+        # try catch 尝试，一旦有错误说明执行完成，没错误继续进行
+        try:
+            # 拼凑url 每次star加20
+
+            url = 'https://movie.douban.com/subject/' + str(mvid) + '/comments?start=' + str(
+                start) + "&limit=20&sort=new_score&status=P"
+            start += 20
+            html = requests.get(url, headers=header,
+                                cookies=cookies)
+            # Beautifulsoup解析网址
+            soup = BeautifulSoup(html.text, "html.parser")
+            # print(html.text)
+            # 爬取的数据
+            # 评论时间
+            # 找span标签，找span标签中的class的comment-time
+            comment_time_list = soup.find_all('span', class_='comment-time')
+            # 设置循环终止变量
+            # 当评论为0时，就结束循环
+            if len(comment_time_list) == 0:
+                print("已获取所有评论")
+                break
+            # print(comment_time_list)
+            # 评论用户名
+            use_name_list = soup.find_all('span', attrs={'class': 'comment-info'})
+            # 评论文本
+            comment_list = soup.find_all('span', attrs={'class': 'short'})
+            # 评分
+            rating_list = soup.find_all('span', attrs={'class': re.compile(r"allstar(\s\w+)?")})
+            # ip
+            ip_list = soup.find_all('span', attrs={'class': 'comment-location'})
+            if len(rating_list) != 20:
+                temp_soup = BeautifulSoup('<span class="allstar30 rating" title="还行"></span>')
+                a = temp_soup.find_all('span', attrs={'class': re.compile(r"allstar(\s\w+)?")})
+                rating_list = rating_list + a
+            for r in range(len(comment_time_list)):
+                data1 = [
+                    (comment_time_list[r].string,
+                     # 评论用户名，下的a标签，
+                     use_name_list[r].a.string,
+                     comment_list[r].string,
+                     rating_list[r].get('class')[0],
+                     ip_list[r].string)
+                ]
+                data2 = pd.DataFrame(data1)
+                # 存储数据
+                data2.to_csv('TheWanderingEarth2_comment.csv', header=False, index=False, mode='a+',
+                             encoding="utf-8-sig")
+            print('正在获取第{}条评论'.format(str(start + 1)))
+
+
+        except Exception as e:  # 有异常退出
+            print(e)
+            break
+        if start == 440:
+            print(2)
+            break
+
+
+
+
+
+if __name__ == '__main__':
+    username = '13268621410'
+    password = 'abc1123995252@'
+    cookies = login(username, password)
+    mvid = 35267208#流浪地球2
+    getcomment(cookies, mvid, start=0)
+    # 添加表头
+    df = pd.read_csv('TheWanderingEarth2_comment.csv', header=None, names=['评论时间', '用户', '评论内容', '评分', '城市'])
+    # df.to_csv('comment.csv', index=False, encoding="utf-8-sig")
+    # 将评分数据改为数字样式
+    df.replace("allstar10", "10", inplace=True)
+    df.replace("allstar20", "20", inplace=True)
+    df.replace("allstar30", "30", inplace=True)
+    df.replace("allstar40", "40", inplace=True)
+    df.replace("allstar50", "50", inplace=True)
+    df.to_csv('comment.csv', index=False, encoding="utf-8-sig")
