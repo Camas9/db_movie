@@ -1,0 +1,125 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# 可视化设置
+plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
+plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+# 读取电影数据集
+movie_data = pd.read_csv(
+    'C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie.csv')
+
+# 分析不同电影的平均评分
+ratings = movie_data.groupby('电影名称')['电影评分'].mean().sort_values(ascending=False)
+ratings.plot(kind='bar', figsize=(10, 6), title='电影评分Top50')
+plt.xlim((0, 50))  # 设置x轴范围
+plt.ylim((8, 10))  # 设置y轴范围
+plt.xlabel('电影名称', fontproperties='Microsoft YaHei')
+plt.ylabel('评分')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/1.png')
+plt.show()
+
+#
+# 分析评分人数随上映年份的变化
+ratings_by_year = movie_data.groupby('上映年份')['评分人数'].sum()
+ratings_by_year.plot(kind='line', figsize=(10, 6), title='评分人数随上映年份的变化')
+plt.xlabel('上映年份')
+plt.ylabel('评分人数')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/2.png')
+plt.show()
+# 分析评分人数随国家的变化
+ratings_by_country = movie_data.groupby('国家')['评分人数'].sum().sort_values(ascending=False)
+ratings_by_country.plot(kind='line', color='b', figsize=(10, 6), title='评分人数随国家的变化')
+plt.xlabel('国家')
+plt.ylabel('评分人数')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/3.png')
+plt.show()
+
+# 分析评分人数随类型的变化
+ratings_by_type = movie_data.groupby('类型')['评分人数'].sum().sort_values(ascending=False)
+ratings_by_type.plot(kind='line', color='g', figsize=(10, 6), title='评分人数随类型的变化')
+plt.xlabel('类型')
+plt.ylabel('评分人数')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/4.png')
+plt.show()
+# 一、分析电影导演分布
+director_counts = movie_data['导演'].value_counts()
+director_counts.plot(kind='bar', color='y', figsize=(10, 6), title='电影导演分布Top50')
+plt.xlim((0, 50))  # 设置x轴范围
+plt.xlabel('导演')
+plt.ylabel('数量')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/5.png')
+plt.show()
+
+# 分析不同导演电影的平均评分
+director_ratings = movie_data.groupby('导演')['电影评分'].mean().sort_values(ascending=False)
+director_ratings.plot(kind='bar', color='y', figsize=(10, 6), title='不同导演电影的平均评分Top50')
+plt.xlim((0, 50))  # 设置x轴范围
+plt.ylim((8, 10))  # 设置y轴范围
+plt.xlabel('导演')
+plt.ylabel('平均评分')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/6.png')
+plt.show()
+
+# 分析不同导演电影的评分人数
+director_ratings = movie_data.groupby('导演').agg({'电影评分': 'mean', '评分人数': 'sum'}).sort_values(by='评分人数', ascending=False)
+director_ratings.plot(kind='bar', y='评分人数', color='y', figsize=(10, 6), title='不同导演电影的评分人数Top50')
+plt.xlim((0, 50))  # 设置x轴范围
+plt.xlabel('导演')
+plt.ylabel('评分人数')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/7.png')
+plt.show()
+
+# 二、分析电影国家分布
+country_counts = movie_data['国家'].value_counts()
+country_counts.plot(kind='bar', color='b', figsize=(10, 6), title='电影国家分布Top50')
+plt.xlim((0, 50))  # 设置x轴范围
+plt.xlabel('国家')
+plt.ylabel('数量')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/8.png')
+plt.show()
+
+# 分析不同国家电影的平均评分
+country_ratings = movie_data.groupby('国家')['电影评分'].mean().sort_values(ascending=False)
+country_ratings.plot(kind='bar', color='b', figsize=(10, 6), title='不同国家电影的平均评分Top50')
+plt.xlim((0, 50))  # 设置x轴范围
+plt.ylim((8, 10))  # 设置y轴范围
+plt.xlabel('国家')
+plt.ylabel('平均评分')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/9.png')
+plt.show()
+
+# 分析电影国家随时间的变化趋势
+country_trends = movie_data.groupby(['上映年份', '国家']).size().unstack().plot(kind='area', stacked=True, figsize=(10, 6))
+plt.title('电影国家随时间的变化趋势')
+plt.xlabel('年份')
+plt.ylabel('数量')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/10.png')
+plt.show()
+
+# 三、分析电影类型分布
+type_counts = movie_data['类型'].value_counts()
+type_counts.plot(kind='bar', color='g', figsize=(10, 6), title='电影类型分布Top50')
+plt.xlim((0, 50))  # 设置x轴范围
+plt.xlabel('电影类型')
+plt.ylabel('数量')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/11.png')
+plt.show()
+
+# 分析不同类型电影的平均评分
+type_ratings = movie_data.groupby('类型')['电影评分'].mean().sort_values(ascending=False)
+type_ratings.plot(kind='bar', color='g', figsize=(10, 6), title='不同类型电影的平均评分Top50')
+plt.xlim((0, 50))  # 设置x轴范围
+plt.ylim((8, 10))  # 设置y轴范围
+plt.xlabel('电影类型')
+plt.ylabel('平均评分')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/12.png')
+plt.show()
+
+# 分析电影类型随时间的变化趋势
+type_trends = movie_data.groupby(['上映年份', '类型']).size().unstack().plot(kind='area', stacked=True, figsize=(10, 6))
+plt.title('电影类型随时间的变化趋势')
+plt.xlabel('年份')
+plt.ylabel('数量')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbmovie/13.png')
+plt.show()
