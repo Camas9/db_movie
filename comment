@@ -1,0 +1,127 @@
+import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+from wordcloud import WordCloud
+import seaborn as sns
+import jieba
+from sklearn.feature_extraction.text import CountVectorizer
+
+# 绘制词云图
+mpl.rcParams['font.family'] = 'sans-serif'
+mpl.rcParams['font.sans-serif'] = ['Arial']
+# 读取数据集
+data = pd.read_csv('C:/Users/Administrator/PycharmProjects/pythonProject2/db/comment.csv')
+# 去除缺失值
+data.dropna(inplace=True)
+# 加载停用词表
+with open('stopword.txt', encoding='utf-8') as f:
+    stop_words = set(f.read().split())
+# 加载情感词典
+positive_words = set()
+negative_words = set()
+with open('positive.txt', encoding='utf-8') as f:
+    for line in f:
+        positive_words.add(line.strip())
+with open('negative.txt', encoding='utf-8') as f:
+    for line in f:
+        negative_words.add(line.strip())
+
+
+# 定义分词函数
+def tokenize(text):
+    words = jieba.cut(text)
+    # 去掉停用词和长度小于2的词
+    return [word for word in words if word not in stop_words and len(word) > 1]
+
+
+# 向量化
+vectorizer = CountVectorizer(tokenizer=tokenize)
+X = vectorizer.fit_transform(data['评论内容'])
+# 根据电影评分将影评分类为正向和负向评论
+pos_mask = data['评分'] >= 25
+neg_mask = data['评分'] < 25
+
+
+# 计算每条影评的情感值
+def calculate_sentiment(text):
+    words = tokenize(text)
+    pos_score, neg_score = 0, 0
+    for word in words:
+        if word in positive_words:
+            pos_score += 1
+        elif word in negative_words:
+            neg_score += 1
+    return pos_score - neg_score
+
+
+# 计算每条影评的情感值并保存到数组中
+sentiments = np.zeros(len(data))
+for i, text in enumerate(data['评论内容']):
+    sentiments[i] = calculate_sentiment(text)
+
+# 将正向和负向评论的情感值分别计算平均值
+pos_sentiment = np.mean(sentiments[pos_mask])
+neg_sentiment = np.mean(sentiments[neg_mask])
+print('流浪地球2的情感评分为:{}'.format(pos_sentiment))
+
+pos_text = ' '.join(data[pos_mask]['评论内容'].tolist())
+neg_text = ' '.join(data[neg_mask]['评论内容'].tolist())
+
+pos_wordcloud = WordCloud(background_color='white', width=800, height=600, font_path="msyh.ttc").generate(pos_text)
+neg_wordcloud = WordCloud(background_color='white', width=800, height=600, font_path="msyh.ttc").generate(neg_text)
+
+# 输出正向评论词云
+plt.subplot(1, 2, 1)
+plt.imshow(pos_wordcloud, interpolation='bilinear')
+plt.axis('off')
+plt.title('Positive Comments')
+
+# 输出负向评论词云
+plt.subplot(1, 2, 2)
+plt.imshow(neg_wordcloud, interpolation='bilinear')
+plt.axis('off')
+plt.title('Negative Comments')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbcomment/1.png')
+plt.show()
+plt.rcParams['font.sans-serif'] = ['FangSong']  # 横众轴显示字体为‘仿宋’的中文标签
+plt.rcParams['axes.unicode_minus'] = False
+
+# 绘制情感值直方图
+plt.hist(sentiments[pos_mask], bins=20, alpha=0.5, label='积极 Comments')
+plt.hist(sentiments[neg_mask], bins=20, alpha=0.5, label='消极 Comments')
+plt.xlim([-1, 1])
+plt.legend(loc='upper right')
+plt.title('情感分析')
+plt.xlabel('分数')
+plt.ylabel('评论个数')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbcomment/2.png')
+plt.show()
+
+data['情感得分'] = sentiments
+
+plt.rc("font", family='Microsoft YaHei')
+# 将评论时间转换为日期格式
+data['评论时间'] = pd.to_datetime(data['评论时间'])
+
+# 按月份统计情感值均值
+monthly_sentiment = data.resample('M', on='评论时间')['情感得分'].mean()
+
+# 绘制月份情感值折线图
+plt.plot(monthly_sentiment)
+plt.title('时间与情感的关系')
+plt.xlabel('月份')
+plt.ylabel('情感值均值')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbcomment/3.png')
+plt.show()
+
+city_sentiment = data.groupby('城市')['情感得分'].sum().sort_values(ascending=False)
+
+# 绘制城市情感值柱状图
+sns.barplot(x=city_sentiment.index, y=city_sentiment.values)
+plt.xticks(rotation=90)
+plt.title('城市与情感的关系')
+plt.xlabel('城市')
+plt.ylabel('情感值总和')
+plt.savefig('C:/Users/Administrator/PycharmProjects/pythonProject2/db/dbcomment/4.png')
+plt.show()
